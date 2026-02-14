@@ -19,7 +19,65 @@ function saveApiKey() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', loadApiKey);
+document.addEventListener('DOMContentLoaded', () => {
+    loadApiKey();
+    loadPromptConfig();
+    setupPromptHandlers();
+});
+
+let defaultPrompt = '';
+let defaultFormatExample = '';
+
+async function loadPromptConfig() {
+    try {
+        const response = await fetch('/api/config/prompt');
+        const config = await response.json();
+        defaultPrompt = config.prompt || '';
+        defaultFormatExample = config.format_example || '';
+        
+        document.getElementById('customPrompt').value = defaultPrompt;
+        document.getElementById('formatExample').value = defaultFormatExample;
+    } catch (e) {
+        console.error('加载提示词配置失败:', e);
+    }
+}
+
+function setupPromptHandlers() {
+    const useCustomPrompt = document.getElementById('useCustomPrompt');
+    const customPromptSection = document.getElementById('customPromptSection');
+    const savePromptBtn = document.getElementById('savePromptBtn');
+    const resetPromptBtn = document.getElementById('resetPromptBtn');
+    
+    useCustomPrompt.addEventListener('change', () => {
+        customPromptSection.style.display = useCustomPrompt.checked ? 'block' : 'none';
+    });
+    
+    savePromptBtn.addEventListener('click', async () => {
+        const prompt = document.getElementById('customPrompt').value;
+        const formatExample = document.getElementById('formatExample').value;
+        
+        try {
+            const response = await fetch('/api/config/prompt', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({prompt, format_example: formatExample})
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert('保存成功！');
+                defaultPrompt = prompt;
+                defaultFormatExample = formatExample;
+            }
+        } catch (e) {
+            alert('保存失败: ' + e.message);
+        }
+    });
+    
+    resetPromptBtn.addEventListener('click', () => {
+        document.getElementById('customPrompt').value = defaultPrompt;
+        document.getElementById('formatExample').value = defaultFormatExample;
+    });
+}
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -170,6 +228,10 @@ uploadBtn.addEventListener('click', async () => {
         progressBar.textContent = '0%';
         progressText.textContent = `已上传 ${uploadData.file_count} 个文件，正在处理...`;
         
+        const useCustomPrompt = document.getElementById('useCustomPrompt').checked;
+        const customPrompt = document.getElementById('customPrompt').value;
+        const formatExample = document.getElementById('formatExample').value;
+        
         const processResponse = await fetch('/api/process', {
             method: 'POST',
             headers: {
@@ -177,7 +239,10 @@ uploadBtn.addEventListener('click', async () => {
             },
             body: JSON.stringify({
                 job_id: currentJobId,
-                api_key: apiKey
+                api_key: apiKey,
+                use_custom: useCustomPrompt,
+                custom_prompt: useCustomPrompt ? customPrompt : null,
+                format_example: useCustomPrompt ? formatExample : null
             })
         });
         

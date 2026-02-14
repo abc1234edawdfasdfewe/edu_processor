@@ -20,6 +20,55 @@
                 </div>
 
                 <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-gear me-2"></i>高级设置
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="useCustomPrompt">
+                            <label class="form-check-label fw-semibold" for="useCustomPrompt">
+                                使用自定义提示词
+                            </label>
+                        </div>
+                        
+                        <div id="customPromptSection" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">提示词</label>
+                                <textarea class="form-control" id="customPrompt" rows="6" 
+                                    placeholder="输入自定义提示词..."></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">
+                                    输出格式示例（可选）
+                                    <span class="text-muted fw-normal">(指定输出格式后，模型会按照此格式输出)</span>
+                                </label>
+                                <textarea class="form-control font-monospace" id="formatExample" rows="6" 
+                                    placeholder="例如：
+## 第一章 概念
+### 1.1 定义
+**关键概念**：...
+
+### 1.2 特点
+- 特点一：...
+- 特点二：..."></textarea>
+                            </div>
+                            
+                            <div class="d-flex gap-2 mb-3">
+                                <button class="btn btn-outline-primary btn-sm" id="savePromptBtn">
+                                    <i class="bi bi-save me-1"></i>保存为默认
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" id="resetPromptBtn">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>恢复默认
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
                     <div class="card-body">
                         <div class="mb-4">
                             <label class="form-label fw-semibold">

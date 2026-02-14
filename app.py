@@ -18,6 +18,45 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'output'
+
+DEFAULT_PROMPT = """你是一位内容架构专家。请分析图片中的内容，并执行：
+
+1. **理解重构**：不要OCR式转录，而是理解逻辑关系（并列、层级、因果）
+2. **结构化输出**：使用Markdown层级（#/##/###）和列表
+3. **逻辑补全**：对于OCR识别的逻辑错误语句进行自动修正
+4. **重点标注**：识别并标注图片中的画线、高亮、手写标注好的重点内容
+5. **格式规范**：
+    - 章节标题用##
+    - 概念层级用### 
+    - 关键点用**加粗**
+    - 逻辑关系用`→`或缩进体现
+
+输出要求：不要随意增加、删减原图片内容，尊重原图文本，直接返回Markdown文本，不要代码块包裹，不要解释性前言。"""
+
+DEFAULT_FORMAT_EXAMPLE = """## 第一章 概念
+
+### 1.1 定义
+**关键概念**：指...
+
+### 1.2 特点
+- 特点一：...
+- 特点二：...
+
+### 1.3 关系
+概念A → 概念B → 概念C"""
+
+CONFIG_FILE = 'prompt_config.json'
+
+def load_prompt_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {'prompt': DEFAULT_PROMPT, 'format_example': DEFAULT_FORMAT_EXAMPLE}
+
+def save_prompt_config_to_file(config):
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
 
@@ -52,25 +91,19 @@ def convert_pdf_to_images(pdf_path, output_dir):
 
 
 class QwenVLProcessor:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, custom_prompt: str = None, format_example: str = None):
         self.api_key = api_key
         self.api_base = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         self.model = "qwen-vl-plus"
         self.semaphore = asyncio.Semaphore(3)
         
-        self.system_prompt = """你是一位内容架构专家。请分析图片中的教学框架/思维导图，并执行：
-
-1. **理解重构**：不要OCR式转录，而是理解逻辑关系（并列、层级、因果）
-2. **结构化输出**：使用Markdown层级（#/##/###）和列表
-3. **逻辑补全**：对于OCR识别的逻辑错误语句进行自动修正
-4. **重点标注**：识别并标注图片中的画线、高亮、手写标注好的重点内容
-5. **格式规范**：
-    - 章节标题用##
-    - 概念层级用### 
-    - 关键点用**加粗**
-    - 逻辑关系用`→`或缩进体现
-
-输出要求：不要随意增加、删减原图片内容，尊重原图文本，直接返回Markdown文本，不要代码块包裹，不要解释性前言。"""
+        if custom_prompt:
+            if format_example:
+                self.system_prompt = custom_prompt + "\n\n" + f"请严格按照以下格式示例输出：\n```{format_example}```"
+            else:
+                self.system_prompt = custom_prompt
+        else:
+            self.system_prompt = DEFAULT_PROMPT
 
     async def process_single(self, image_path: str, session: aiohttp.ClientSession) -> Dict:
         async with self.semaphore:
@@ -164,6 +197,23 @@ class QwenVLProcessor:
             return summary
 
 
+@app.route('/api/config/prompt', methods=['GET'])
+def get_prompt_config():
+    config = load_prompt_config()
+    return jsonify(config)
+
+
+@app.route('/api/config/prompt', methods=['POST'])
+def save_prompt_config_api():
+    data = request.get_json()
+    config = {
+        'prompt': data.get('prompt', DEFAULT_PROMPT),
+        'format_example': data.get('format_example', DEFAULT_FORMAT_EXAMPLE)
+    }
+    save_prompt_config_to_file(config)
+    return jsonify({'success': True})
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -221,6 +271,9 @@ def process_files():
     data = request.get_json()
     job_id = data.get('job_id')
     api_key = data.get('api_key', '').strip()
+    custom_prompt = data.get('custom_prompt')
+    format_example = data.get('format_example')
+    use_custom = data.get('use_custom', False)
     
     if not job_id or not api_key:
         return jsonify({'error': '缺少必要参数'}), 400
@@ -239,7 +292,10 @@ def process_files():
     
     file_paths = [str(f) for f in image_files]
     
-    processor = QwenVLProcessor(api_key)
+    if use_custom and custom_prompt:
+        processor = QwenVLProcessor(api_key, custom_prompt, format_example)
+    else:
+        processor = QwenVLProcessor(api_key)
     summary = asyncio.run(processor.batch_process(file_paths, job_id))
     
     return jsonify({
